@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - FLAC Downsampler  (flac_downsampler.sh)
+// MARK: - FLAC Downsampler  (native — FlacDownsampler.swift)
 struct FlacPanel: View {
     @StateObject private var r = ToolRunner()
     @AppStorage("flac.path") private var path = ""
@@ -18,11 +18,11 @@ struct FlacPanel: View {
     }
 
     private func run() {
-        var flags: [String] = []
-        if replace { flags += ["--replace", "--yes"] }
-        var tail = [path]
-        if !replace, !output.isEmpty { tail.append(output) }
-        r.run(Paths.shared.bash(script: "flac_downsampler.sh", args: flags + tail))
+        let opt = FlacOptions(replace: replace, outputDir: replace ? "" : output)
+        let dir = path
+        r.runNative { emit, progress in
+            await FlacDownsampler.run(directory: dir, options: opt, emit: emit, progress: progress)
+        }
     }
 }
 

@@ -11,7 +11,7 @@ options as native controls → a live console.
 
 | Panel            | Script                   | Runtime |
 |------------------|--------------------------|---------|
-| FLAC Downsampler | flac_downsampler.sh      | bash    |
+| FLAC Downsampler | native (FlacDownsampler.swift) | Swift |
 | CUE Splitter     | native (CueSplitter.swift)   | Swift   |
 | Lyrics Fetcher   | native (LyricsFetcher.swift) | Swift   |
 | Encoding Fixer   | native (EncodingFixer.swift) | Swift   |

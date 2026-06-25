@@ -48,12 +48,6 @@ final class Paths {
         return env
     }
 
-    func bash(script: String, args: [String]) -> Cmd {
-        let p = scriptsDir.appendingPathComponent(script).path
-        return Cmd(exe: URL(fileURLWithPath: "/bin/bash"), args: [p] + args,
-                   env: baseEnv(), cwd: scriptsDir)
-    }
-
     /// Resolve a tool binary (ffmpeg/ffprobe): bundled arm64 first, then
     /// Homebrew, then system. Returns nil if not found anywhere.
     func tool(_ name: String) -> URL? {
