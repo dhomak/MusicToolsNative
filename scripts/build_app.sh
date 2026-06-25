@@ -3,7 +3,7 @@
 #   ./scripts/build_app.sh
 set -euo pipefail
 APP_NAME="MusicTools"
-ICON_SRC="${ICON_SRC:-/Users/aalien/sandbox/split-cue/build/icon.icns}"
+ICON_SRC="${ICON_SRC:-AppIcon.icns}"
 
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)/$APP_NAME"
