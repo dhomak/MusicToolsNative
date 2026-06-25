@@ -1,11 +1,8 @@
 # Music Tools — native (pure Swift)
 
-A SwiftUI macOS app that runs the five media scripts directly — no Node, no
+A SwiftUI macOS app that runs the four media scripts directly — no Node, no
 Express, no WKWebView, no `server.js`/`index.html`. The app *is* the UI and
 spawns each script as a subprocess, streaming its output into a native console.
-
-Layout mirrors the old web UI: a sidebar of tools → a panel with that tool's
-options as native controls → a live console.
 
 ## Tools → scripts
 
