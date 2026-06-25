@@ -4,6 +4,8 @@ A native macOS app for tidying up a music library — downsampling FLACs, splitt
 
 It started as a pile of shell/Python/Perl scripts and a small web UI. This is the rewrite: every tool is now native Swift, each runs in-process, streams its output to a live console, shows real progress, and can be cancelled mid-run.
 
+![Music Tools screenshot](docs/screenshot.png)
+
 ---
 
 ## Tools
