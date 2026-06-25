@@ -1,0 +1,25 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Build output
+build/
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node (fftmp tooling)
+node_modules/
