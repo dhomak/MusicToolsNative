@@ -50,10 +50,14 @@ struct PathField: View {
 
 struct StatusBadge: View {
     @ObservedObject var runner: ToolRunner
+    @Environment(\.palette) private var palette
     var body: some View {
         Group {
             if runner.isRunning {
-                Label("running", systemImage: "circle.dotted").foregroundStyle(Theme.accent)
+                Label("running", systemImage: "circle.dotted")
+                    .foregroundStyle(palette.accent)
+                    .shadow(color: palette.glow ? palette.accent.opacity(0.7) : .clear,
+                            radius: palette.glow ? 4 : 0)
             } else if let c = runner.exitCode {
                 if c == 0 {
                     Label("done", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
@@ -70,6 +74,14 @@ struct StatusBadge: View {
 
 struct ConsoleView: View {
     @ObservedObject var runner: ToolRunner
+    @Environment(\.palette) private var palette
+
+    private var consoleShape: AnyShape {
+        palette.chamfer > 0
+            ? AnyShape(ChamferedRectangle(chamfer: palette.chamfer))
+            : AnyShape(RoundedRectangle(cornerRadius: 8))
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -77,7 +89,7 @@ struct ConsoleView: View {
                     ForEach(Array(runner.lines.enumerated()), id: \.offset) { idx, line in
                         Text(line.isEmpty ? " " : line)
                             .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(Theme.consoleText)
+                            .foregroundStyle(palette.consoleText)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .id(idx)
@@ -85,8 +97,15 @@ struct ConsoleView: View {
                 }
                 .padding(10)
             }
-            .background(Theme.consoleBg)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(palette.consoleBg)
+            .clipShape(consoleShape)
+            .overlay(
+                consoleShape
+                    .stroke(palette.glow ? palette.accent.opacity(0.55) : .clear,
+                            lineWidth: palette.glow ? 1 : 0)
+                    .shadow(color: palette.glow ? palette.accent.opacity(0.55) : .clear,
+                            radius: palette.glow ? 6 : 0)
+            )
             .onChange(of: runner.lines.count) { _ in
                 if let last = runner.lines.indices.last {
                     proxy.scrollTo(last, anchor: .bottom)
@@ -106,6 +125,7 @@ struct ToolScaffold<Controls: View>: View {
     let onRun: () -> Void
     var revealPath: String? = nil
     @ViewBuilder var controls: () -> Controls
+    @Environment(\.palette) private var palette
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -134,7 +154,7 @@ struct ToolScaffold<Controls: View>: View {
             }
 
             if let p = runner.progress {
-                ProgressView(value: p).tint(Theme.accent)
+                ProgressView(value: p).tint(palette.accent)
             }
 
             ConsoleView(runner: runner)

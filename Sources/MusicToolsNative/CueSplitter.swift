@@ -5,6 +5,7 @@ struct CueOptions: Sendable {
     var deleteOrig = false   // delete source .flac + .cue after full success
     var overwrite = false    // overwrite existing finals instead of uniquifying
     var dryRun = false       // preview moves/deletes, do nothing destructive
+    var recursive = true     // descend into subfolders
 }
 
 /// Pure-Swift replacement for split-cue-unicode.pl.
@@ -40,7 +41,7 @@ enum CueSplitter {
             emit("❌ Directory not found: \(root.path)"); return 1
         }
 
-        let cues = findCues(root)
+        let cues = findCues(root, recursive: options.recursive)
         if cues.isEmpty { emit("❌ No .cue files found"); return 0 }
         emit("🎼 CUE Splitter (native)")
         emit("📁 \(cues.count) cue sheet(s)" + (options.dryRun ? "  ·  DRY RUN" : "") + "\n")
@@ -201,9 +202,10 @@ enum CueSplitter {
 
     // MARK: - cue parsing
 
-    private static func findCues(_ root: URL) -> [URL] {
+    private static func findCues(_ root: URL, recursive: Bool) -> [URL] {
         var out: [URL] = []
-        if let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) {
+        let opts: FileManager.DirectoryEnumerationOptions = recursive ? [] : [.skipsSubdirectoryDescendants]
+        if let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil, options: opts) {
             for case let u as URL in en where u.pathExtension.lowercased() == "cue" { out.append(u) }
         }
         return out.sorted { $0.path < $1.path }

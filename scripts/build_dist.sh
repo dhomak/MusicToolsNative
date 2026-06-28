@@ -4,7 +4,7 @@
 #   ./scripts/build_dist.sh
 set -euo pipefail
 APP_NAME="MusicTools"
-ICON_SRC="${ICON_SRC:-AppIcon.icns}"
+ICON_SRC="${ICON_SRC:-/Users/aalien/sandbox/split-cue/build/icon.icns}"
 DEV_ID="${DEV_ID:-}"
 VARCH=arm64
 [ "$(uname -m)" = arm64 ] || echo "warning: host isn't arm64" >&2

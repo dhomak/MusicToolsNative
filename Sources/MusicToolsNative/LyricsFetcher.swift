@@ -5,6 +5,7 @@ struct LyricsOptions: Sendable {
     var delay = 0.3
     var overwrite = false
     var preferTxt = false
+    var recursive = true
 }
 
 /// Pure-Swift replacement for audio_lyrics_fetcher.py.
@@ -30,7 +31,7 @@ enum LyricsFetcher {
         }
 
         emit("🎼 Lyrics Fetcher (native)\n")
-        let files = findAudio(root)
+        let files = findAudio(root, recursive: options.recursive)
         if files.isEmpty { emit("❌ No audio files found"); return 0 }
         emit("📁 Found \(files.count) audio files")
         emit("⚙️  \(options.workers) workers · \(options.delay)s pacing\n")
@@ -116,9 +117,10 @@ enum LyricsFetcher {
         }
     }
 
-    private static func findAudio(_ root: URL) -> [URL] {
+    private static func findAudio(_ root: URL, recursive: Bool) -> [URL] {
         var out: [URL] = []
-        if let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) {
+        let opts: FileManager.DirectoryEnumerationOptions = recursive ? [] : [.skipsSubdirectoryDescendants]
+        if let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil, options: opts) {
             for case let u as URL in en where audioExts.contains(u.pathExtension.lowercased()) {
                 out.append(u)
             }

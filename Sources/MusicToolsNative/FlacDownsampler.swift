@@ -3,6 +3,8 @@ import Foundation
 struct FlacOptions: Sendable {
     var replace = false       // overwrite originals (via local staging + copy back)
     var outputDir = ""        // when not replacing; empty = a "downsampled" subfolder
+    var recursive = true      // descend into subfolders
+    var dryRun = false        // list what would convert, write nothing
 }
 
 /// Native replacement for flac_downsampler.sh. Walks for FLACs, skips anything
@@ -33,20 +35,25 @@ enum FlacDownsampler {
         }
 
         emit("🎚️  FLAC Downsampler (native) → 44.1 kHz / 16-bit")
-        emit(options.replace ? "♻️  replace originals (staged locally, copied back)"
-                             : "📂 output: " + (options.outputDir.isEmpty ? "<dir>/downsampled" : options.outputDir))
+        if options.dryRun {
+            emit("👀 dry-run — listing what would convert, writing nothing")
+        } else {
+            emit(options.replace ? "♻️  replace originals (staged locally, copied back)"
+                                 : "📂 output: " + (options.outputDir.isEmpty ? "<dir>/downsampled" : options.outputDir))
+        }
         emit("")
 
-        let files = findFlacs(root)
+        let files = findFlacs(root, recursive: options.recursive)
         if files.isEmpty { emit("❌ No .flac files found"); return 0 }
         let total = files.count
 
-        // local staging dir (NOT on the source/NAS volume)
+        // local staging dir (NOT on the source/NAS volume); only needed when writing
         let stage = fm.temporaryDirectory.appendingPathComponent("musictools-flac-\(UUID().uuidString)")
-        try? fm.createDirectory(at: stage, withIntermediateDirectories: true)
+        if !options.dryRun { try? fm.createDirectory(at: stage, withIntermediateDirectories: true) }
         defer { try? fm.removeItem(at: stage) }
 
         var done = 0, skipped = 0, converted = 0, failed = 0
+        var savedBytes: Int64 = 0, pendingBytes: Int64 = 0
         for (i, file) in files.enumerated() {
             if Task.isCancelled { emit("\n⏹️  cancelled"); return 130 }
             defer { done += 1; progress(Double(done) / Double(total)) }
@@ -59,7 +66,14 @@ enum FlacDownsampler {
             }
             let rateStr = info.rate.map { "\($0)Hz" } ?? "?"
             let bitsStr = info.bits.map { "\($0)bit" } ?? "?"
-            emit("🎵 \(file.lastPathComponent) — \(rateStr)/\(bitsStr) → 44100Hz/16bit")
+            let origSize = Int64((try? fm.attributesOfItem(atPath: file.path)[.size] as? Int) ?? 0)
+            emit("🎵 \(file.lastPathComponent) — \(rateStr)/\(bitsStr) → 44100Hz/16bit  (\(human(origSize)))")
+
+            if options.dryRun {
+                pendingBytes += origSize
+                converted += 1   // "would convert"
+                continue
+            }
 
             let tmp = stage.appendingPathComponent("\(UUID().uuidString).flac")
             let dur = info.duration ?? 0
@@ -81,8 +95,8 @@ enum FlacDownsampler {
                 }
             })
             if Task.isCancelled { failed += 1; break }
-            let size = (try? fm.attributesOfItem(atPath: tmp.path)[.size] as? Int) ?? 0
-            guard code == 0, size > 0 else {
+            let newSize = Int64((try? fm.attributesOfItem(atPath: tmp.path)[.size] as? Int) ?? 0)
+            guard code == 0, newSize > 0 else {
                 emit("   ⚠️ ffmpeg failed" + (out.isEmpty ? "" : ": \(out.suffix(160))"))
                 try? fm.removeItem(at: tmp)
                 failed += 1
@@ -93,12 +107,13 @@ enum FlacDownsampler {
             do {
                 if options.replace {
                     try placeReplacing(original: file, staged: tmp, fm: fm)
-                    emit("   ✅ replaced")
+                    emit("   ✅ replaced  (\(human(origSize)) → \(human(newSize)))")
                 } else {
                     let dest = try outputURL(for: file, root: root, options: options, fm: fm)
                     try copyOverwriting(from: tmp, to: dest, fm: fm)
-                    emit("   ✅ \(dest.lastPathComponent)")
+                    emit("   ✅ \(dest.lastPathComponent)  (\(human(origSize)) → \(human(newSize)))")
                 }
+                savedBytes += max(0, origSize - newSize)
                 converted += 1
             } catch {
                 emit("   ⚠️ place failed: \(error.localizedDescription)")
@@ -108,8 +123,16 @@ enum FlacDownsampler {
         }
 
         emit("\n" + String(repeating: "=", count: 50))
-        emit("📊 converted \(converted) · skipped \(skipped) · errors \(failed)")
+        if options.dryRun {
+            emit("📊 would convert \(converted) · skipped \(skipped)  ·  \(human(pendingBytes)) to process")
+        } else {
+            emit("📊 converted \(converted) · skipped \(skipped) · errors \(failed)  ·  saved \(human(savedBytes))")
+        }
         return failed == 0 ? 0 : 1
+    }
+
+    private static func human(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     // MARK: - placement
@@ -171,9 +194,10 @@ enum FlacDownsampler {
         return Info(rate: rate, bits: bits, duration: dur)
     }
 
-    private static func findFlacs(_ root: URL) -> [URL] {
+    private static func findFlacs(_ root: URL, recursive: Bool) -> [URL] {
         var out: [URL] = []
-        if let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) {
+        let opts: FileManager.DirectoryEnumerationOptions = recursive ? [] : [.skipsSubdirectoryDescendants]
+        if let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil, options: opts) {
             for case let u as URL in en where u.pathExtension.lowercased() == "flac" {
                 // don't re-process our own output folder
                 if u.deletingLastPathComponent().lastPathComponent == "downsampled" { continue }

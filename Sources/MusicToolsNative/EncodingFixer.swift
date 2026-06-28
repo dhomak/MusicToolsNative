@@ -4,6 +4,7 @@ struct EncodingOptions: Sendable {
     var apply = false     // off = dry-run preview
     var backup = false    // write .cue.bak before overwriting
     var verbose = false   // log already-clean files too
+    var recursive = true  // descend into subfolders
 }
 
 /// Recovers the correct text from mis-encoded bytes by generating every reading
@@ -88,7 +89,7 @@ enum EncodingFixer {
                            : "👀 dry-run (preview only — nothing written)")
         emit("")
 
-        let cues = findCues(root)
+        let cues = findCues(root, recursive: options.recursive)
         if cues.isEmpty { emit("❌ No .cue files found"); return 0 }
         let total = cues.count
 
@@ -139,9 +140,10 @@ enum EncodingFixer {
         return failed == 0 ? 0 : 1
     }
 
-    private static func findCues(_ root: URL) -> [URL] {
+    private static func findCues(_ root: URL, recursive: Bool) -> [URL] {
         var out: [URL] = []
-        if let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) {
+        let opts: FileManager.DirectoryEnumerationOptions = recursive ? [] : [.skipsSubdirectoryDescendants]
+        if let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil, options: opts) {
             for case let u as URL in en where u.pathExtension.lowercased() == "cue" { out.append(u) }
         }
         return out.sorted { $0.path < $1.path }
