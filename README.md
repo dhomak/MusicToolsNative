@@ -17,6 +17,8 @@ controls → a live console.
 | **Lyrics Fetcher** | Fetch and save synced/unsynced lyrics as `.lrc` sidecars |
 | **Encoding Fixer** | Detect and fix mojibake in CUE sheet text (Shift-JIS → UTF-8, etc.) |
 
+![Music Tools screenshot](docs/screenshot.png)
+
 ## Build
 
 ```sh
