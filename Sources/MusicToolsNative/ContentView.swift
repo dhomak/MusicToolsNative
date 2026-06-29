@@ -5,6 +5,11 @@ struct ContentView: View {
     @AppStorage("skin") private var skinRaw = Skin.system.rawValue
     @Environment(\.palette) private var palette
 
+    // Owned here (not in the panel) so a scan's results survive navigating
+    // away to a fix-tool and back.
+    @StateObject private var healthRunner = ToolRunner()
+    @StateObject private var healthModel = HealthModel()
+
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
@@ -32,7 +37,8 @@ struct ContentView: View {
         } detail: {
             Group {
                 switch selection ?? .health {
-                case .health:    LibraryHealthPanel()
+                case .health:    LibraryHealthPanel(runner: healthRunner, model: healthModel,
+                                                     navigate: { selection = $0 })
                 case .flac:      FlacPanel()
                 case .cueSplit:  CueSplitPanel()
                 case .lyrics:    LyricsPanel()

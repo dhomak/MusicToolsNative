@@ -1,8 +1,20 @@
 import SwiftUI
+import AppKit
+
+@MainActor final class HealthModel: ObservableObject {
+    @Published var result: HealthResult?
+    @Published var filter: HealthCategory? = nil
+    @Published var search = ""
+    @Published var sortOrder = [KeyPathComparator(\HealthIssue.relPath)]
+}
 
 // MARK: - Library Health  (native — LibraryHealth.swift)
 struct LibraryHealthPanel: View {
-    @StateObject private var r = ToolRunner()
+    @ObservedObject var runner: ToolRunner
+    @ObservedObject var model: HealthModel
+    let navigate: (Tool) -> Void
+    @Environment(\.palette) private var palette
+
     @AppStorage("health.path") private var path = ""
     @AppStorage("health.recursive") private var recursive = true
     @AppStorage("health.hires") private var hiRes = true
@@ -10,26 +22,149 @@ struct LibraryHealthPanel: View {
     @AppStorage("health.cues") private var cues = true
     @AppStorage("health.tags") private var tags = true
 
+    private var visible: [HealthIssue] {
+        var rows = model.result?.issues ?? []
+        if let f = model.filter { rows = rows.filter { $0.category == f } }
+        if !model.search.isEmpty { rows = rows.filter { $0.relPath.localizedCaseInsensitiveContains(model.search) } }
+        return rows.sorted(using: model.sortOrder)
+    }
+
     var body: some View {
-        ToolScaffold(title: "Library Health",
-                     subtitle: "Read-only audit — finds what the other tools can fix",
-                     runner: r, canRun: !path.isEmpty, onRun: run, revealPath: path) {
-            PathField("Directory", text: $path)
-            Toggle("Search subfolders", isOn: $recursive)
-            Toggle("Hi-res FLACs to downsample (slower — probes each FLAC)", isOn: $hiRes)
-            Toggle("Tracks missing lyrics", isOn: $lyrics)
-            Toggle("Mis-encoded cue sheets", isOn: $cues)
-            Toggle("Files missing tags", isOn: $tags)
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Library Health").font(.title2.bold())
+                Text("Read-only audit — finds what the other tools can fix")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                PathField("Directory", text: $path)
+                Toggle("Search subfolders", isOn: $recursive)
+                Toggle("Hi-res FLACs to downsample (slower — probes each FLAC)", isOn: $hiRes)
+                Toggle("Tracks missing lyrics", isOn: $lyrics)
+                Toggle("Mis-encoded cue sheets", isOn: $cues)
+                Toggle("Files missing tags", isOn: $tags)
+            }
+
+            HStack(spacing: 10) {
+                Button(action: run) { Label("Scan", systemImage: "play.fill") }
+                    .keyboardShortcut(.return, modifiers: [.command])
+                    .disabled(path.isEmpty || runner.isRunning)
+                Button(action: runner.cancel) { Label("Stop", systemImage: "stop.fill") }
+                    .disabled(!runner.isRunning)
+                if let rp = model.result?.reportPath, !runner.isRunning {
+                    Button { revealFile(rp) } label: { Label("Report", systemImage: "doc.text") }
+                }
+                Spacer()
+                StatusBadge(runner: runner)
+            }
+
+            if let p = runner.progress { ProgressView(value: p).tint(palette.accent) }
+
+            resultsArea
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder private var resultsArea: some View {
+        if let result = model.result {
+            if result.issues.isEmpty {
+                Spacer()
+                Label("Everything looks healthy.", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green).font(.title3)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                Spacer()
+            } else {
+                toolbar(result)
+                table
+            }
+        } else if !runner.isRunning {
+            Spacer()
+            Text("Scan a folder to see results.")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+            Spacer()
+        } else {
+            Spacer()
         }
     }
 
+    private func toolbar(_ result: HealthResult) -> some View {
+        HStack(spacing: 10) {
+            Picker("Show", selection: $model.filter) {
+                Text("All (\(result.issues.count))").tag(HealthCategory?.none)
+                ForEach(HealthCategory.allCases) { c in
+                    let n = result.issues.filter { $0.category == c }.count
+                    if n > 0 { Text("\(c.rawValue) (\(n))").tag(HealthCategory?.some(c)) }
+                }
+            }
+            .labelsHidden().fixedSize()
+            TextField("Filter by name…", text: $model.search)
+                .textFieldStyle(.roundedBorder).frame(maxWidth: 240)
+            if let cat = model.filter, let tool = cat.fixTool {
+                Button { fix(tool) } label: {
+                    Label("Fix all \(cat.rawValue)", systemImage: "wrench.and.screwdriver")
+                }
+            }
+            Spacer()
+            Text("\(visible.count) shown").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var table: some View {
+        Table(visible, sortOrder: $model.sortOrder) {
+            TableColumn("Category", value: \.category.rawValue) { issue in
+                Text(issue.category.rawValue)
+            }.width(90)
+            TableColumn("File", value: \.relPath) { issue in
+                Text(issue.relPath).lineLimit(1).truncationMode(.middle).help(issue.path)
+            }
+            TableColumn("Detail", value: \.detail) { issue in
+                Text(issue.detail).foregroundStyle(.secondary)
+            }.width(150)
+            TableColumn("Actions") { issue in
+                HStack(spacing: 10) {
+                    Button { revealFile(issue.path) } label: { Image(systemName: "folder") }
+                        .help("Reveal in Finder")
+                    Button { openFile(issue.path) } label: { Image(systemName: "play.circle") }
+                        .help("Open / play")
+                    if let tool = issue.category.fixTool {
+                        Button { fix(tool) } label: { Image(systemName: "wrench.and.screwdriver") }
+                            .help("Fix in \(tool.title)")
+                    }
+                }
+                .buttonStyle(.borderless)
+            }.width(110)
+        }
+        .frame(minHeight: 260, maxHeight: .infinity)
+    }
+
+    // MARK: actions
+
     private func run() {
+        model.result = nil
+        model.filter = nil; model.search = ""
         let opt = HealthOptions(recursive: recursive, checkHiRes: hiRes,
                                 checkLyrics: lyrics, checkCues: cues, checkTags: tags)
         let dir = path
-        r.runNative { emit, progress in
-            await LibraryHealth.run(directory: dir, options: opt, emit: emit, progress: progress)
+        let m = model
+        runner.runNative { _, progress in
+            await LibraryHealth.run(directory: dir, options: opt, progress: progress) { res in
+                Task { @MainActor in m.result = res }
+            }
         }
+    }
+
+    private func revealFile(_ p: String) {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)])
+    }
+    private func openFile(_ p: String) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: p))
+    }
+    private func fix(_ tool: Tool) {
+        UserDefaults.standard.set(path, forKey: tool.pathKey)   // pre-fill that tool's folder
+        navigate(tool)
     }
 }
 

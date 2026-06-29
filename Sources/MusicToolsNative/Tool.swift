@@ -24,4 +24,15 @@ enum Tool: String, CaseIterable, Identifiable, Hashable {
         case .encoding:  return "character.cursor.ibeam"
         }
     }
+
+    /// UserDefaults key for each tool's directory field (matches its @AppStorage).
+    var pathKey: String {
+        switch self {
+        case .health:    return "health.path"
+        case .flac:      return "flac.path"
+        case .cueSplit:  return "cue.path"
+        case .lyrics:    return "lyrics.path"
+        case .encoding:  return "encoding.path"
+        }
+    }
 }
