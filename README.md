@@ -57,10 +57,27 @@ MusicTools.app/Contents/
       ffprobe
 ```
 
+## Release Notes
+
+### v1.4.2
+- Version bump and clean rebuild over v1.4.1 (no code changes)
+
+### v1.4.1
+- **Library Health** now writes a complete `library-health-report.txt` to the scanned folder (or `/tmp` as fallback) — large libraries no longer get silently truncated in the console
+
+### v1.4.0
+- Added **Library Health** tool: read-only audit that surfaces hi-res FLACs, missing lyrics, mis-encoded CUE sheets, and files with missing tags
+
+### v1.3.1
+- Refreshed app icon (cleaner design, no outer glow border)
+
+### v1.3.0
+- Ported **FLAC Downsampler** to native Swift (removed bash script dependency)
+
 ## Release
 
 ```sh
 ./scripts/build_dist.sh
-hdiutil create -volname "MusicTools" -srcfolder build/MusicTools.app -ov -format UDZO build/MusicTools.dmg
+./scripts/package_dmg.sh
 gh release create v1.x.0 build/MusicTools.dmg --title "v1.x.0"
 ```
