@@ -7,6 +7,8 @@ spawns each script as a subprocess, streaming its output into a native console.
 Layout mirrors the old web UI: a sidebar of tools → a panel with that tool's
 options as native controls → a live console.
 
+![Music Tools screenshot](docs/screenshot.png)
+
 ## Tools → scripts
 
 | Panel            | Script                   | Runtime |
