@@ -6,12 +6,13 @@ struct HealthOptions: Sendable {
     var checkLyrics = true  // audio files with no .lrc/.txt sidecar
     var checkCues = true    // .cue files not in clean UTF-8
     var checkTags = true    // audio missing artist/title
-    var maxSamples = 12     // example files listed per category
+    var maxSamples = 12     // example files shown in the console per category
 }
 
-/// Read-only audit of a music library. Writes nothing; surfaces what the other
-/// tools could fix: hi-res FLACs to downsample, tracks missing lyrics,
-/// mis-encoded cue sheets, and files with missing tags.
+/// Read-only audit of a music library. Surfaces what the other tools can fix:
+/// hi-res FLACs to downsample, tracks missing lyrics, mis-encoded cue sheets,
+/// and files missing tags. The console shows a sample; the COMPLETE list of
+/// every flagged file is written to a text report you can open.
 enum LibraryHealth {
 
     private static let audioExts: Set<String> = ["flac", "mp3", "m4a", "mp4"]
@@ -39,11 +40,11 @@ enum LibraryHealth {
         emit("📁 \(audio.count) audio file(s), \(cues.count) cue sheet(s)\n")
         if audio.isEmpty && cues.isEmpty { emit("Nothing to scan here."); return 0 }
 
+        // FULL lists (not capped) — the console samples them, the report gets all.
         var hiRes: [String] = []
         var noLyrics: [String] = []
         var badCue: [String] = []
         var noTags: [String] = []
-        var hiResCount = 0, noLyricsCount = 0, badCueCount = 0, noTagsCount = 0
 
         let totalUnits = max(1, cues.count + audio.count)
         var done = 0
@@ -56,10 +57,7 @@ enum LibraryHealth {
             let result = Mojibake.best(from: data)
             let asUTF8 = String(data: data, encoding: .utf8)
             if asUTF8 == nil || asUTF8! != result.text {
-                badCueCount += 1
-                if badCue.count < options.maxSamples {
-                    badCue.append("\(rel(cue, root))  [\(result.source)]")
-                }
+                badCue.append("\(rel(cue, root))  [\(result.source)]")
             }
         }
 
@@ -73,66 +71,95 @@ enum LibraryHealth {
                 let base = file.deletingPathExtension()
                 let hasLrc = fm.fileExists(atPath: base.appendingPathExtension("lrc").path)
                 let hasTxt = fm.fileExists(atPath: base.appendingPathExtension("txt").path)
-                if !hasLrc && !hasTxt {
-                    noLyricsCount += 1
-                    if noLyrics.count < options.maxSamples { noLyrics.append(rel(file, root)) }
-                }
+                if !hasLrc && !hasTxt { noLyrics.append(rel(file, root)) }
             }
 
             if options.checkTags {
                 let tags = await TagReader.read(file)
                 if tags.artist == nil || tags.title == nil {
-                    noTagsCount += 1
-                    if noTags.count < options.maxSamples {
-                        let missing = [tags.artist == nil ? "artist" : nil, tags.title == nil ? "title" : nil]
-                            .compactMap { $0 }.joined(separator: "+")
-                        noTags.append("\(rel(file, root))  (no \(missing))")
-                    }
+                    let missing = [tags.artist == nil ? "artist" : nil, tags.title == nil ? "title" : nil]
+                        .compactMap { $0 }.joined(separator: "+")
+                    noTags.append("\(rel(file, root))  (no \(missing))")
                 }
             }
 
             if options.checkHiRes, ext == "flac", let ffprobe {
                 if let (rate, bits) = await probeRateBits(ffprobe, file, env: env),
                    rate > 44100 || bits > 16 {
-                    hiResCount += 1
-                    if hiRes.count < options.maxSamples {
-                        hiRes.append("\(rel(file, root))  (\(rate)Hz/\(bits)bit)")
-                    }
+                    hiRes.append("\(rel(file, root))  (\(rate)Hz/\(bits)bit)")
                 }
             }
         }
 
-        // report
+        // console report (sampled)
         emit(String(repeating: "=", count: 50))
-        section(emit, "⬆️  Hi-res FLACs (downsample candidates)", hiResCount, hiRes, options)
-        section(emit, "📝 Missing lyrics", noLyricsCount, noLyrics, options)
-        section(emit, "🔤 Mis-encoded cue sheets", badCueCount, badCue, options)
-        section(emit, "🏷️  Missing tags", noTagsCount, noTags, options)
+        section(emit, "⬆️  Hi-res FLACs (downsample candidates)", hiRes, options.maxSamples)
+        section(emit, "📝 Missing lyrics", noLyrics, options.maxSamples)
+        section(emit, "🔤 Mis-encoded cue sheets", badCue, options.maxSamples)
+        section(emit, "🏷️  Missing tags", noTags, options.maxSamples)
+        emit(String(repeating: "=", count: 50))
 
-        emit(String(repeating: "=", count: 50))
-        if hiResCount + noLyricsCount + badCueCount + noTagsCount == 0 {
+        let total = hiRes.count + noLyrics.count + badCue.count + noTags.count
+        if total == 0 {
             emit("✅ Everything looks healthy.")
+            return 0
+        }
+        emit("📊 hi-res \(hiRes.count) · no-lyrics \(noLyrics.count) · bad-cue \(badCue.count) · no-tags \(noTags.count)")
+        var tips: [String] = []
+        if !hiRes.isEmpty    { tips.append("FLAC Downsampler") }
+        if !noLyrics.isEmpty { tips.append("Lyrics Fetcher") }
+        if !badCue.isEmpty   { tips.append("Encoding Fixer") }
+        if !tips.isEmpty { emit("💡 Run: " + tips.joined(separator: " · ") + "  (on this same folder — each skips what's already fine)") }
+
+        // full report file (every entry)
+        if let path = writeReport(root: root, audio: audio.count, cues: cues.count,
+                                  hiRes: hiRes, noLyrics: noLyrics, badCue: badCue, noTags: noTags) {
+            emit("\n📄 Full list (\(total) entries) saved to:\n   \(path)")
         } else {
-            emit("📊 hi-res \(hiResCount) · no-lyrics \(noLyricsCount) · bad-cue \(badCueCount) · no-tags \(noTagsCount)")
-            var tips: [String] = []
-            if hiResCount > 0    { tips.append("FLAC Downsampler") }
-            if noLyricsCount > 0 { tips.append("Lyrics Fetcher") }
-            if badCueCount > 0   { tips.append("Encoding Fixer") }
-            if !tips.isEmpty { emit("💡 Run: " + tips.joined(separator: " · ")) }
+            emit("\n⚠️ couldn't write the full report (folder not writable)")
         }
         return 0
     }
 
-    // MARK: - helpers
+    // MARK: - report
 
     private static func section(_ emit: @escaping @Sendable (String) -> Void,
-                                _ title: String, _ count: Int, _ samples: [String],
-                                _ options: HealthOptions) {
-        guard count > 0 else { emit("\(title): 0"); return }
-        emit("\(title): \(count)")
-        for s in samples { emit("     • \(s)") }
-        if count > samples.count { emit("     … and \(count - samples.count) more") }
+                                _ title: String, _ items: [String], _ limit: Int) {
+        guard !items.isEmpty else { emit("\(title): 0"); return }
+        emit("\(title): \(items.count)")
+        for s in items.prefix(limit) { emit("     • \(s)") }
+        if items.count > limit {
+            emit("     … and \(items.count - limit) more — full list in the report file")
+        }
     }
+
+    private static func writeReport(root: URL, audio: Int, cues: Int,
+                                    hiRes: [String], noLyrics: [String],
+                                    badCue: [String], noTags: [String]) -> String? {
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd HH:mm"
+        var text = "Library Health Report\n"
+        text += "Directory: \(root.path)\n"
+        text += "Generated: \(df.string(from: Date()))\n"
+        text += "Scanned:   \(audio) audio file(s), \(cues) cue sheet(s)\n"
+        func block(_ title: String, _ items: [String]) {
+            text += "\n========== \(title): \(items.count) ==========\n"
+            for i in items { text += i + "\n" }
+        }
+        block("Hi-res FLACs (downsample candidates)", hiRes)
+        block("Missing lyrics", noLyrics)
+        block("Mis-encoded cue sheets", badCue)
+        block("Missing tags", noTags)
+
+        let name = "library-health-report.txt"
+        // Prefer the scanned folder (the user granted access to it); fall back to temp.
+        for url in [root.appendingPathComponent(name),
+                    FileManager.default.temporaryDirectory.appendingPathComponent(name)] {
+            if (try? text.write(to: url, atomically: true, encoding: .utf8)) != nil { return url.path }
+        }
+        return nil
+    }
+
+    // MARK: - scan helpers
 
     private static func rel(_ url: URL, _ root: URL) -> String {
         let p = url.path
