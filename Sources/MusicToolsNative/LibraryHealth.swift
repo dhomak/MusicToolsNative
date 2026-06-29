@@ -38,6 +38,7 @@ struct HealthResult: Sendable {
     var audio = 0
     var cues = 0
     var reportPath: String?
+    var error: String?     // set when the folder couldn't be scanned at all
 }
 
 /// Read-only audit. Returns structured rows (for a sortable/filterable table)
@@ -52,10 +53,16 @@ enum LibraryHealth {
                     report: @escaping @Sendable (HealthResult) -> Void) async -> Int32 {
 
         let fm = FileManager.default
-        let root = URL(fileURLWithPath: (directory as NSString).expandingTildeInPath)
+        let trimmed = directory.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.contains("://") {
+            report(HealthResult(error: "“\(trimmed)” is a network URL, not a mounted folder.\nConnect the share in Finder first, then point this at its /Volumes/… path."))
+            return 1
+        }
+        let root = URL(fileURLWithPath: (trimmed as NSString).expandingTildeInPath)
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else {
-            report(HealthResult()); return 1
+            report(HealthResult(error: "Folder not found:\n\(root.path)\nIf it’s on a network volume, the disk may be disconnected."))
+            return 1
         }
 
         let ffprobe = options.checkHiRes ? Paths.shared.tool("ffprobe") : nil

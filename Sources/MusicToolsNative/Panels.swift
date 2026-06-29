@@ -49,9 +49,12 @@ struct LibraryHealthPanel: View {
             HStack(spacing: 10) {
                 Button(action: run) { Label("Scan", systemImage: "play.fill") }
                     .keyboardShortcut(.return, modifiers: [.command])
+                    .tint(palette.accent)
                     .disabled(path.isEmpty || runner.isRunning)
                 Button(action: runner.cancel) { Label("Stop", systemImage: "stop.fill") }
                     .disabled(!runner.isRunning)
+                Button(action: clear) { Label("Clear", systemImage: "trash") }
+                    .disabled(runner.isRunning || model.result == nil)
                 if let rp = model.result?.reportPath, !runner.isRunning {
                     Button { revealFile(rp) } label: { Label("Report", systemImage: "doc.text") }
                 }
@@ -69,7 +72,26 @@ struct LibraryHealthPanel: View {
 
     @ViewBuilder private var resultsArea: some View {
         if let result = model.result {
-            if result.issues.isEmpty {
+            if let err = result.error {
+                Spacer()
+                VStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 34)).foregroundStyle(.orange)
+                    Text(err).multilineTextAlignment(.center).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                Spacer()
+            } else if result.audio == 0 && result.cues == 0 {
+                Spacer()
+                VStack(spacing: 10) {
+                    Image(systemName: "questionmark.folder")
+                        .font(.system(size: 34)).foregroundStyle(.secondary)
+                    Text("No audio files or cue sheets found in this folder.")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                Spacer()
+            } else if result.issues.isEmpty {
                 Spacer()
                 Label("Everything looks healthy.", systemImage: "checkmark.seal.fill")
                     .foregroundStyle(.green).font(.title3)
@@ -112,31 +134,46 @@ struct LibraryHealthPanel: View {
         }
     }
 
+    private var tableShape: AnyShape {
+        palette.chamfer > 0
+            ? AnyShape(ChamferedRectangle(chamfer: palette.chamfer))
+            : AnyShape(RoundedRectangle(cornerRadius: 8))
+    }
+
     private var table: some View {
         Table(visible, sortOrder: $model.sortOrder) {
             TableColumn("Category", value: \.category.rawValue) { issue in
-                Text(issue.category.rawValue)
+                Text(issue.category.rawValue).foregroundStyle(palette.accent)
             }.width(90)
             TableColumn("File", value: \.relPath) { issue in
-                Text(issue.relPath).lineLimit(1).truncationMode(.middle).help(issue.path)
+                Text(issue.relPath).foregroundStyle(palette.consoleText)
+                    .lineLimit(1).truncationMode(.middle).help(issue.path)
             }
             TableColumn("Detail", value: \.detail) { issue in
-                Text(issue.detail).foregroundStyle(.secondary)
+                Text(issue.detail).foregroundStyle(palette.consoleText.opacity(0.6))
             }.width(150)
             TableColumn("Actions") { issue in
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     Button { revealFile(issue.path) } label: { Image(systemName: "folder") }
-                        .help("Reveal in Finder")
+                        .help("Reveal in Finder").foregroundStyle(palette.accent)
                     Button { openFile(issue.path) } label: { Image(systemName: "play.circle") }
-                        .help("Open / play")
+                        .help("Open / play").foregroundStyle(palette.accent)
                     if let tool = issue.category.fixTool {
                         Button { fix(tool) } label: { Image(systemName: "wrench.and.screwdriver") }
-                            .help("Fix in \(tool.title)")
+                            .help("Fix in \(tool.title)").foregroundStyle(palette.pink)
                     }
                 }
                 .buttonStyle(.borderless)
             }.width(110)
         }
+        .scrollContentBackground(.hidden)
+        .background(palette.consoleBg)
+        .clipShape(tableShape)
+        .overlay(
+            tableShape.stroke(palette.glow ? palette.accent.opacity(0.55) : Color.primary.opacity(0.12),
+                              lineWidth: 1)
+        )
+        .shadow(color: palette.glow ? palette.accent.opacity(0.4) : .clear, radius: palette.glow ? 6 : 0)
         .frame(minHeight: 260, maxHeight: .infinity)
     }
 
@@ -165,6 +202,13 @@ struct LibraryHealthPanel: View {
     private func fix(_ tool: Tool) {
         UserDefaults.standard.set(path, forKey: tool.pathKey)   // pre-fill that tool's folder
         navigate(tool)
+    }
+
+    private func clear() {
+        model.result = nil
+        model.filter = nil
+        model.search = ""
+        runner.clear()
     }
 }
 

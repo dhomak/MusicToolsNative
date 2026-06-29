@@ -54,6 +54,14 @@ MusicTools.app/Contents/Resources/
 
 ## Release Notes
 
+### v1.5.1
+- **Library Health** shows a clear error when the path is a network URL instead of a mounted volume path
+- Better "folder not found" message when the disk may be disconnected
+- Empty-folder state: distinct warning when the folder has no audio files or cue sheets
+- **Clear** button in the Library Health toolbar resets results without needing to re-run
+- Table now inherits the app's accent colour, console background, border, and glow from the active palette
+- Scan button tinted with the accent colour
+
 ### v1.5.0
 - **Library Health** results now display in a sortable, filterable table instead of raw console text
 - Per-row actions: Reveal in Finder, Open file, and one-click navigate to the fix tool
