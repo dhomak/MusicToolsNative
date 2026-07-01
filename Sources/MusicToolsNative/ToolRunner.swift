@@ -1,6 +1,12 @@
 import Foundation
 import Darwin
 
+/// Special exit codes shared by the tools and the status badge.
+/// Real process exits are 0…255 (130 = cancelled), so negatives are safe sentinels.
+enum ToolExit {
+    static let empty: Int32 = -2   // finished cleanly, but there was nothing to do
+}
+
 /// Tracks running process-group leaders so the app can kill them all on quit.
 /// Lives outside the @MainActor class so it's reachable from any thread.
 enum JobRegistry {

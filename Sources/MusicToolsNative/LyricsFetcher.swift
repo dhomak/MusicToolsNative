@@ -27,7 +27,7 @@ enum LyricsFetcher {
 
         emit("🎼 Lyrics Fetcher (native)\n")
         let files = findAudio(root, recursive: options.recursive)
-        if files.isEmpty { emit("❌ No audio files found"); return 0 }
+        if files.isEmpty { emit("ℹ️ No audio files found"); return ToolExit.empty }
         emit("📁 Found \(files.count) audio files")
         emit("⚙️  \(options.workers) workers · \(options.delay)s pacing\n")
         let total = files.count

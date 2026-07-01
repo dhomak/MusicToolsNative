@@ -59,9 +59,14 @@ struct StatusBadge: View {
                     .shadow(color: palette.glow ? palette.accent.opacity(0.7) : .clear,
                             radius: palette.glow ? 4 : 0)
             } else if let c = runner.exitCode {
-                if c == 0 {
+                switch c {
+                case 0:
                     Label("done", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                } else {
+                case ToolExit.empty:
+                    Label("nothing found", systemImage: "tray").foregroundStyle(.secondary)
+                case 130:
+                    Label("stopped", systemImage: "stop.circle").foregroundStyle(.secondary)
+                default:
                     Label("exit \(c)", systemImage: "xmark.octagon.fill").foregroundStyle(.red)
                 }
             } else {

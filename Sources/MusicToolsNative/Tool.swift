@@ -35,4 +35,15 @@ enum Tool: String, CaseIterable, Identifiable, Hashable {
         case .encoding:  return "encoding.path"
         }
     }
+
+    /// UserDefaults key for each tool's "search subfolders" toggle.
+    var recursiveKey: String {
+        switch self {
+        case .health:    return "health.recursive"
+        case .flac:      return "flac.recursive"
+        case .cueSplit:  return "cue.recursive"
+        case .lyrics:    return "lyrics.recursive"
+        case .encoding:  return "encoding.recursive"
+        }
+    }
 }

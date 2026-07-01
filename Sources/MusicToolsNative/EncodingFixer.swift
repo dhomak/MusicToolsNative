@@ -86,7 +86,7 @@ enum EncodingFixer {
         emit("")
 
         let cues = findCues(root, recursive: options.recursive)
-        if cues.isEmpty { emit("❌ No .cue files found"); return 0 }
+        if cues.isEmpty { emit("ℹ️ No .cue files found"); return ToolExit.empty }
         let total = cues.count
 
         var fixed = 0, clean = 0, failed = 0

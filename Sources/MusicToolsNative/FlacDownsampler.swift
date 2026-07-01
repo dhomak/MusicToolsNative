@@ -40,7 +40,7 @@ enum FlacDownsampler {
         emit("")
 
         let files = findFlacs(root, recursive: options.recursive)
-        if files.isEmpty { emit("❌ No .flac files found"); return 0 }
+        if files.isEmpty { emit("ℹ️ No .flac files found"); return ToolExit.empty }
         let total = files.count
 
         // local staging dir (NOT on the source/NAS volume); only needed when writing

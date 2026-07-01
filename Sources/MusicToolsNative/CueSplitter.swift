@@ -38,7 +38,7 @@ enum CueSplitter {
         guard let root = DirCheck.resolveOrEmit(directory, emit: emit) else { return 1 }
 
         let cues = findCues(root, recursive: options.recursive)
-        if cues.isEmpty { emit("❌ No .cue files found"); return 0 }
+        if cues.isEmpty { emit("ℹ️ No .cue files found"); return ToolExit.empty }
         emit("🎼 CUE Splitter (native)")
         emit("📁 \(cues.count) cue sheet(s)" + (options.dryRun ? "  ·  DRY RUN" : "") + "\n")
 
@@ -103,6 +103,10 @@ enum CueSplitter {
         if !opt.dryRun {
             try? fm.createDirectory(at: stageDir, withIntermediateDirectories: true)
         }
+        // In toRoot mode the stage dir is temporary — clean it on every exit
+        // (success, error, or cancel) so a stopped run never leaves .split.tmp
+        // litter on the NAS. In non-toRoot mode the "split" dir IS the output.
+        defer { if opt.toRoot && !opt.dryRun { try? fm.removeItem(at: stageDir) } }
 
         let albumArtist = sheet.performer ?? ""
         let albumTitle  = sheet.title ?? ""
@@ -161,7 +165,6 @@ enum CueSplitter {
         }
 
         if !allOK {
-            if !opt.dryRun, opt.toRoot { try? fm.removeItem(at: stageDir) }   // clean partial staging
             emit("  ✗ incomplete — left no partial output")
             return false
         }
@@ -177,7 +180,6 @@ enum CueSplitter {
                     do { try fm.moveItem(at: s, to: dest); emit("  [MOVE] \(dest.lastPathComponent)") }
                     catch { emit("  [ERR] move \(s.lastPathComponent): \(error.localizedDescription)"); allOK = false }
                 }
-                try? fm.removeItem(at: stageDir)
             }
         } else {
             emit("  → \(staged.count) tracks in \(stageDir.lastPathComponent)/")

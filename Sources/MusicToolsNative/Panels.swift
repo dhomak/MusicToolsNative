@@ -201,7 +201,8 @@ struct LibraryHealthPanel: View {
         NSWorkspace.shared.open(URL(fileURLWithPath: p))
     }
     private func fix(_ tool: Tool) {
-        UserDefaults.standard.set(path, forKey: tool.pathKey)   // pre-fill that tool's folder
+        UserDefaults.standard.set(path, forKey: tool.pathKey)              // pre-fill that tool's folder
+        UserDefaults.standard.set(recursive, forKey: tool.recursiveKey)   // and match the audit's subfolder scope
         navigate(tool)
     }
 
